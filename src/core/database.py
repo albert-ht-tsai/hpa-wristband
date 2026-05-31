@@ -10,8 +10,7 @@ load_dotenv()
 
 AWS_RDS_URL = os.getenv("AWS_RDS_URL")
 
-DATABASE_URL = AWS_RDS_URL
-engine = create_engine(DATABASE_URL)
+engine = create_engine(AWS_RDS_URL)
 
 SessionLocal = sessionmaker(
     autocommit=False,
