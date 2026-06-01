@@ -27,6 +27,15 @@ def _get_owned_device(db: Session, user: User, user_device_id: int) -> UserDevic
 
 
 def create_device(db: Session, user: User, data: UserDeviceCreateRequest) -> UserDevice:
+    existing = db.query(UserDevice).filter(
+        UserDevice.user_id == user.id,
+        UserDevice.mac_address == data.mac_address,
+    ).first()
+    if existing:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail={"code": 409, "message": "Device with this MAC address already exists for this user"},
+        )
     device = UserDevice(
         user_id=user.id,
         mac_address=data.mac_address,

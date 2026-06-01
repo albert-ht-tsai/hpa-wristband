@@ -30,8 +30,8 @@ router = APIRouter(prefix="/users/devices", tags=["users_devices"])
 
 @router.post("", response_model=UserDeviceCreateResponse, status_code=201)
 def create_device_endpoint(body: UserDeviceCreateRequest, db: SessionDep, current_user: CurrentUser):
-    create_device(db, current_user, body)
-    return UserDeviceCreateResponse(code=201, msg="User device created successfully")
+    device = create_device(db, current_user, body)
+    return UserDeviceCreateResponse.model_validate(device)
 
 
 @router.get("/{user_device_id}", response_model=UserDeviceResponse)

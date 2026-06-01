@@ -26,8 +26,13 @@ class UserDeviceResponse(BaseModel):
 
 
 class UserDeviceCreateResponse(BaseModel):
-    code: int
-    msg: str
+    id: int
+    mac_address: str
+    type: str
+    name: str
+    is_shared: bool
+
+    model_config = {"from_attributes": True}
 
 
 class UserDeviceUpdateResponse(BaseModel):
