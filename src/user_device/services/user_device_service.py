@@ -53,6 +53,10 @@ def get_device(db: Session, user: User, user_device_id: int) -> UserDevice:
     return _get_owned_device(db, user, user_device_id)
 
 
+def get_devices(db: Session, user: User) -> list[UserDevice]:
+    return db.query(UserDevice).filter(UserDevice.user_id == user.id).all()
+
+
 def update_device(db: Session, user: User, user_device_id: int, data: UserDeviceUpdateRequest) -> None:
     device = _get_owned_device(db, user, user_device_id)
     for field, value in data.model_dump(exclude_unset=True).items():

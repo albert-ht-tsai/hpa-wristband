@@ -11,6 +11,7 @@ from src.user_device.schemas.user_device_schema import (
     UserDeviceCreateRequest,
     UserDeviceCreateResponse,
     UserDeviceDeleteResponse,
+    UserDeviceListResponse,
     UserDeviceResponse,
     UserDeviceUpdateRequest,
     UserDeviceUpdateResponse,
@@ -20,7 +21,7 @@ from src.user_device.services.user_device_service import (
     create_health_batch,
     create_location,
     delete_device,
-    get_device,
+    get_devices,
     get_locations,
     update_device,
 )
@@ -34,10 +35,13 @@ def create_device_endpoint(body: UserDeviceCreateRequest, db: SessionDep, curren
     return UserDeviceCreateResponse.model_validate(device)
 
 
-@router.get("/{user_device_id}", response_model=UserDeviceResponse)
-def get_device_endpoint(user_device_id: int, db: SessionDep, current_user: CurrentUser):
-    device = get_device(db, current_user, user_device_id)
-    return UserDeviceResponse.model_validate(device)
+@router.get("", response_model=UserDeviceListResponse)
+def get_devices_endpoint(db: SessionDep, current_user: CurrentUser):
+    devices = get_devices(db, current_user)
+    return UserDeviceListResponse(
+        data=[UserDeviceResponse.model_validate(d) for d in devices],
+        count=len(devices),
+    )
 
 
 @router.put("/{user_device_id}", response_model=UserDeviceUpdateResponse)

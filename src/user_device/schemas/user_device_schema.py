@@ -17,12 +17,18 @@ class UserDeviceUpdateRequest(BaseModel):
 
 
 class UserDeviceResponse(BaseModel):
+    id: int
     mac_address: str
     type: str
     name: str
     is_shared: bool
 
     model_config = {"from_attributes": True}
+
+
+class UserDeviceListResponse(BaseModel):
+    data: List[UserDeviceResponse]
+    count: int
 
 
 class UserDeviceCreateResponse(BaseModel):
