@@ -104,6 +104,16 @@ def get_locations(db: Session, user: User, user_device_id: int) -> list[UserDevi
     )
 
 
+def get_health_batches(db: Session, user: User, user_device_id: int) -> list[UserDeviceHealthBatch]:
+    _get_owned_device(db, user, user_device_id)
+    return (
+        db.query(UserDeviceHealthBatch)
+        .filter(UserDeviceHealthBatch.user_device_id == user_device_id)
+        .order_by(UserDeviceHealthBatch.created_at.desc())
+        .all()
+    )
+
+
 def create_health_batch(db: Session, user: User, user_device_id: int, data: DailyHealthCreateRequest) -> None:
     _get_owned_device(db, user, user_device_id)
     batch = UserDeviceHealthBatch(

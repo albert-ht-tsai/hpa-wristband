@@ -96,3 +96,20 @@ class DailyHealthCreateRequest(BaseModel):
 class DailyHealthCreateResponse(BaseModel):
     code: int
     msg: str
+
+
+class DailyHealthItem(BaseModel):
+    id: int
+    user_device_id: int
+    batch_size: int
+    record_count: int
+    sleep_data: list
+    origin_data_3: list
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class DailyHealthListResponse(BaseModel):
+    data: List[DailyHealthItem]
+    count: int

@@ -4,6 +4,8 @@ from src.core.deps import CurrentUser, SessionDep
 from src.user_device.schemas.user_device_schema import (
     DailyHealthCreateRequest,
     DailyHealthCreateResponse,
+    DailyHealthItem,
+    DailyHealthListResponse,
     LocationCreateRequest,
     LocationCreateResponse,
     LocationItem,
@@ -22,6 +24,7 @@ from src.user_device.services.user_device_service import (
     create_location,
     delete_device,
     get_devices,
+    get_health_batches,
     get_locations,
     update_device,
 )
@@ -69,6 +72,15 @@ def get_locations_endpoint(user_device_id: int, db: SessionDep, current_user: Cu
         code=200,
         data=[LocationItem.model_validate(loc) for loc in locations],
         count=len(locations),
+    )
+
+
+@router.get("/{user_device_id}/daily-health", response_model=DailyHealthListResponse)
+def get_daily_health_endpoint(user_device_id: int, db: SessionDep, current_user: CurrentUser):
+    batches = get_health_batches(db, current_user, user_device_id)
+    return DailyHealthListResponse(
+        data=[DailyHealthItem.model_validate(b) for b in batches],
+        count=len(batches),
     )
 
 
