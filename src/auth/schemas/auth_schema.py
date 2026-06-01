@@ -33,6 +33,10 @@ class TokenResponse(BaseModel):
     refresh_token_exp_day: int
 
 
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
+
+
 class LogoutResponse(BaseModel):
     code: int
     msg: str

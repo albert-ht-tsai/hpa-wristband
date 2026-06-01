@@ -3,6 +3,7 @@ import smtplib
 from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
+from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 
 from src.core.logging import logger
@@ -10,6 +11,8 @@ from src.core.logging import logger
 from src.auth.models.verification_code_model import VerificationCode
 from src.core.email import send_email
 from src.core.security import (
+    ALGORITHM,
+    REFRESH_SECRET_KEY,
     create_access_token,
     create_refresh_token,
     get_password_hash,
@@ -136,19 +139,37 @@ def login(db: Session, email: str, password: str) -> dict:
     }
 
 
-def refresh_tokens(db: Session, user_id: int, old_refresh_token: str) -> dict:
+def refresh_tokens(db: Session, refresh_token: str) -> dict:
+    try:
+        payload = jwt.decode(refresh_token, REFRESH_SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("sub")
+        if user_id is None or payload.get("type") != "refresh":
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail={"code": 403, "message": "Invalid refresh token"})
+    except JWTError:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail={"code": 403, "message": "Invalid refresh token"})
+
     db_token = db.query(UserToken).filter(
-        UserToken.user_id == user_id,
-        UserToken.refresh_token == old_refresh_token,
+        UserToken.user_id == int(user_id),
+        UserToken.refresh_token == refresh_token,
+        UserToken.revoked == False,  # noqa: E712
     ).first()
-    if db_token:
-        db_token.revoked = True
+    if not db_token:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail={"code": 403, "message": "Token revoked or not found"})
+
+    expire = db_token.refresh_token_expire
+    now = datetime.now(timezone.utc)
+    if expire.tzinfo is None:
+        expire = expire.replace(tzinfo=timezone.utc)
+    if expire < now:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail={"code": 403, "message": "Refresh token expired"})
+
+    db_token.revoked = True
 
     new_access_token, new_access_expire = create_access_token(str(user_id))
     new_refresh_token, new_refresh_expire = create_refresh_token(str(user_id))
 
     db.add(UserToken(
-        user_id=user_id,
+        user_id=int(user_id),
         access_token=new_access_token,
         refresh_token=new_refresh_token,
         access_token_expire=new_access_expire,

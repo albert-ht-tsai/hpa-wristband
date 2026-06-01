@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from src.auth.schemas.auth_schema import (
     LoginRequest,
     LogoutResponse,
+    RefreshTokenRequest,
     SignupRequest,
     SignupResponse,
     TokenResponse,
@@ -16,7 +17,7 @@ from src.auth.services.auth_service import (
     send_verification_code,
     signup,
 )
-from src.core.deps import CurrentUser, RefreshCurrentUser, SessionDep, TokenDep
+from src.core.deps import CurrentUser, SessionDep, TokenDep
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -39,8 +40,8 @@ def login_endpoint(body: LoginRequest, db: SessionDep):
 
 
 @router.post("/refresh-token", response_model=TokenResponse)
-def refresh_token_endpoint(db: SessionDep, current_user: RefreshCurrentUser, token: TokenDep):
-    return refresh_tokens(db, current_user.id, token)
+def refresh_token_endpoint(body: RefreshTokenRequest, db: SessionDep):
+    return refresh_tokens(db, body.refresh_token)
 
 
 @router.post("/logout", response_model=LogoutResponse)
