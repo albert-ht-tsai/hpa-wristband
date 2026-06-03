@@ -1,7 +1,7 @@
 from datetime import datetime
-from typing import List, Optional
+from typing import Annotated, List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class UserDeviceCreateRequest(BaseModel):
@@ -113,3 +113,26 @@ class DailyHealthItem(BaseModel):
 class DailyHealthListResponse(BaseModel):
     data: List[DailyHealthItem]
     count: int
+
+
+class TrajectoryPoint(BaseModel):
+    lat: float
+    lng: float
+    timestamp: datetime
+
+
+class TrajectoryBatchInfo(BaseModel):
+    batch_size: int
+    record_count: int
+
+
+class LocationBatchCreateRequest(BaseModel):
+    batch: TrajectoryBatchInfo
+    locations: Annotated[List[TrajectoryPoint], Field(max_length=50)]
+
+
+class LocationBatchCreateResponse(BaseModel):
+    code: int
+    msg: str
+    total: int
+    saved: int

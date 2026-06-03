@@ -1,3 +1,5 @@
+from datetime import date, datetime, time, timezone
+
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 
@@ -7,6 +9,7 @@ from src.user.models.user_model import User
 from src.user_device.models.user_device_model import UserDevice, UserDeviceHealthBatch, UserDeviceLocation
 from src.user_device.schemas.user_device_schema import (
     DailyHealthCreateRequest,
+    LocationBatchCreateRequest,
     LocationCreateRequest,
     UserDeviceCreateRequest,
     UserDeviceUpdateRequest,
@@ -125,3 +128,55 @@ def create_health_batch(db: Session, user: User, user_device_id: int, data: Dail
     )
     db.add(batch)
     db.commit()
+
+
+def create_location_batch(
+    db: Session, user: User, user_device_id: int, data: LocationBatchCreateRequest
+) -> dict:
+    _get_owned_device(db, user, user_device_id)
+
+    client = None
+    try:
+        client = GoogleMapClient()
+    except Exception as e:
+        logger.warning("GoogleMapClient init failed, skipping geocoding: %s", e)
+
+    db_locations = []
+    for point in data.locations:
+        address = None
+        if client:
+            try:
+                address = client.get_address(f"{point.lat},{point.lng}")
+            except Exception as e:
+                logger.warning("Reverse geocoding failed for (%s, %s): %s", point.lat, point.lng, e)
+        db_locations.append(
+            UserDeviceLocation(
+                user_device_id=user_device_id,
+                latitude=point.lat,
+                longitude=point.lng,
+                timestamp=point.timestamp,
+                address=address,
+            )
+        )
+
+    db.add_all(db_locations)
+    db.commit()
+    return {"total": len(data.locations), "saved": len(db_locations)}
+
+
+def get_location_batch(
+    db: Session, user: User, user_device_id: int, start_date: date, end_date: date
+) -> list[UserDeviceLocation]:
+    _get_owned_device(db, user, user_device_id)
+    start_dt = datetime.combine(start_date, time.min, tzinfo=timezone.utc)
+    end_dt = datetime.combine(end_date, time.max, tzinfo=timezone.utc)
+    return (
+        db.query(UserDeviceLocation)
+        .filter(
+            UserDeviceLocation.user_device_id == user_device_id,
+            UserDeviceLocation.timestamp >= start_dt,
+            UserDeviceLocation.timestamp <= end_dt,
+        )
+        .order_by(UserDeviceLocation.timestamp.asc())
+        .all()
+    )
