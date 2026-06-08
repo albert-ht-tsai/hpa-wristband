@@ -6,9 +6,11 @@ from fastapi import HTTPException, status
 from src.core.logging import logger
 from src.map.map_client import GoogleMapClient
 from src.user.models.user_model import User
-from src.user_device.models.user_device_model import UserDevice, UserDeviceHealthBatch, UserDeviceLocation
+from src.user_device.models.user_device_model import UserDevice, UserDeviceHealthBatch, UserDeviceHealthRecord, UserDeviceLocation
 from src.user_device.schemas.user_device_schema import (
     DailyHealthCreateRequest,
+    HealthRecordCreateRequest,
+    HealthRecordResponse,
     LocationBatchCreateRequest,
     LocationCreateRequest,
     UserDeviceCreateRequest,
@@ -179,4 +181,69 @@ def get_location_batch(
         )
         .order_by(UserDeviceLocation.timestamp.asc())
         .all()
+    )
+
+
+def create_health_record(
+    db: Session, user: User, user_device_id: int, data: HealthRecordCreateRequest
+) -> UserDeviceHealthRecord:
+    _get_owned_device(db, user, user_device_id)
+    record = UserDeviceHealthRecord(
+        user_device_id=user_device_id,
+        batch_date=data.batchDate,
+        batch_size=data.batch.batch_size,
+        record_count=data.batch.record_count,
+        is_loading=False,
+        is_complete=True,
+        progress=1.0,
+        error=None,
+        sleep_by_day=[item.model_dump() for item in data.sleepByDay] if data.sleepByDay else None,
+        heart_rate=data.heartRate.model_dump() if data.heartRate else None,
+        blood_pressure=data.bloodPressure.model_dump() if data.bloodPressure else None,
+        blood_oxygen=data.bloodOxygen.model_dump() if data.bloodOxygen else None,
+        body_temperature=data.bodyTemperature.model_dump() if data.bodyTemperature else None,
+        calories=data.calories.model_dump() if data.calories else None,
+        distance=data.distance.model_dump() if data.distance else None,
+        met=data.met.model_dump() if data.met else None,
+        stress=data.stress.model_dump() if data.stress else None,
+        hrv=data.hrv.model_dump() if data.hrv else None,
+        ecg=data.ecg.model_dump() if data.ecg else None,
+    )
+    db.add(record)
+    db.commit()
+    db.refresh(record)
+    return record
+
+
+def get_health_records(
+    db: Session, user: User, user_device_id: int
+) -> list[UserDeviceHealthRecord]:
+    _get_owned_device(db, user, user_device_id)
+    return (
+        db.query(UserDeviceHealthRecord)
+        .filter(UserDeviceHealthRecord.user_device_id == user_device_id)
+        .order_by(UserDeviceHealthRecord.created_at.desc())
+        .all()
+    )
+
+
+def health_record_to_response(record: UserDeviceHealthRecord) -> HealthRecordResponse:
+    return HealthRecordResponse(
+        id=record.id,
+        batchDate=record.batch_date,
+        isLoading=record.is_loading,
+        isComplete=record.is_complete,
+        progress=record.progress,
+        error=record.error,
+        sleepByDay=record.sleep_by_day,
+        heartRate=record.heart_rate,
+        bloodPressure=record.blood_pressure,
+        bloodOxygen=record.blood_oxygen,
+        bodyTemperature=record.body_temperature,
+        calories=record.calories,
+        distance=record.distance,
+        met=record.met,
+        stress=record.stress,
+        hrv=record.hrv,
+        ecg=record.ecg,
     )

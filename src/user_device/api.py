@@ -8,6 +8,9 @@ from src.user_device.schemas.user_device_schema import (
     DailyHealthCreateResponse,
     DailyHealthItem,
     DailyHealthListResponse,
+    HealthRecordCreateRequest,
+    HealthRecordListResponse,
+    HealthRecordResponse,
     LocationCreateRequest,
     LocationCreateResponse,
     LocationItem,
@@ -25,13 +28,16 @@ from src.user_device.schemas.user_device_schema import (
 from src.user_device.services.user_device_service import (
     create_device,
     create_health_batch,
+    create_health_record,
     create_location,
     create_location_batch,
     get_location_batch,
     delete_device,
     get_devices,
     get_health_batches,
+    get_health_records,
     get_locations,
+    health_record_to_response,
     update_device,
 )
 
@@ -104,6 +110,21 @@ def create_location_batch_endpoint(user_device_id: int, body: LocationBatchCreat
         msg="Location batch created successfully",
         total=result["total"],
         saved=result["saved"],
+    )
+
+
+@router.post("/{user_device_id}/health-batch", response_model=HealthRecordResponse, status_code=201)
+def create_health_record_endpoint(user_device_id: int, body: HealthRecordCreateRequest, db: SessionDep, current_user: CurrentUser):
+    record = create_health_record(db, current_user, user_device_id, body)
+    return health_record_to_response(record)
+
+
+@router.get("/{user_device_id}/health-batch", response_model=HealthRecordListResponse)
+def get_health_records_endpoint(user_device_id: int, db: SessionDep, current_user: CurrentUser):
+    records = get_health_records(db, current_user, user_device_id)
+    return HealthRecordListResponse(
+        data=[health_record_to_response(r) for r in records],
+        count=len(records),
     )
 
 

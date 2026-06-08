@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from src.auth.api import router as auth_router
 from src.core.database import init_db
+from src.healthcare.api import router as healthcare_router
 from src.user.api import router as user_router
 from src.user_device.api import router as user_device_router
 
@@ -31,3 +32,4 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(user_router)
 app.include_router(user_device_router)
+app.include_router(healthcare_router)
