@@ -1,13 +1,14 @@
+from datetime import date
+
 from fastapi import APIRouter
 
 from src.core.deps import CurrentUser, SessionDep
 from src.healthcare.schemas.healthcare_schema import (
-    HealthcareAnalysisRequest,
     HealthcareReportListResponse,
     HealthcareReportResponse,
 )
 from src.healthcare.services.healthcare_service import (
-    create_healthcare_analysis,
+    generate_healthcare_analysis,
     get_healthcare_reports,
     report_to_response,
 )
@@ -15,19 +16,18 @@ from src.healthcare.services.healthcare_service import (
 router = APIRouter(prefix="/users/devices", tags=["healthcare"])
 
 
-@router.post(
+@router.get(
     "/{user_device_id}/healthcare/analysis",
     response_model=HealthcareReportResponse,
-    status_code=201,
 )
-def create_analysis_endpoint(
+def get_analysis_endpoint(
     user_device_id: int,
-    body: HealthcareAnalysisRequest,
+    start_date: date,
+    end_date: date,
     db: SessionDep,
     current_user: CurrentUser,
 ):
-    report = create_healthcare_analysis(db, current_user, user_device_id, body.health_record_id)
-    return report_to_response(report)
+    return generate_healthcare_analysis(db, current_user, user_device_id, start_date, end_date)
 
 
 @router.get(
@@ -38,8 +38,10 @@ def get_reports_endpoint(
     user_device_id: int,
     db: SessionDep,
     current_user: CurrentUser,
+    start_date: date | None = None,
+    end_date: date | None = None,
 ):
-    reports = get_healthcare_reports(db, current_user, user_device_id)
+    reports = get_healthcare_reports(db, current_user, user_device_id, start_date, end_date)
     return HealthcareReportListResponse(
         data=[report_to_response(r) for r in reports],
         count=len(reports),

@@ -1,7 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, JSON, String
-from sqlalchemy.orm import relationship
+from sqlalchemy import Column, Date, DateTime, ForeignKey, Integer, JSON, String
 
 from src.core.database import Base
 
@@ -12,7 +11,8 @@ class UserHealthcareReport(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     user_device_id = Column(Integer, ForeignKey("user_devices.id"), nullable=False, index=True)
-    health_record_id = Column(Integer, ForeignKey("user_device_health_records.id"), nullable=True)
+    start_date = Column(Date, nullable=True, index=True)
+    end_date = Column(Date, nullable=True, index=True)
 
     score_total = Column(Integer, nullable=True)
     score_sleep = Column(Integer, nullable=True)

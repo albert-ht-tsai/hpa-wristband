@@ -1,4 +1,4 @@
-from datetime import date, datetime, time, timezone
+from datetime import date
 
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
@@ -6,13 +6,11 @@ from fastapi import HTTPException, status
 from src.core.logging import logger
 from src.map.map_client import GoogleMapClient
 from src.user.models.user_model import User
-from src.user_device.models.user_device_model import UserDevice, UserDeviceHealthBatch, UserDeviceHealthRecord, UserDeviceLocation
+from src.user_device.models.user_device_model import UserDevice, UserDeviceHealthRecord, UserDeviceLocation
 from src.user_device.schemas.user_device_schema import (
-    DailyHealthCreateRequest,
     HealthRecordCreateRequest,
     HealthRecordResponse,
     LocationBatchCreateRequest,
-    LocationCreateRequest,
     UserDeviceCreateRequest,
     UserDeviceUpdateRequest,
 )
@@ -76,62 +74,6 @@ def delete_device(db: Session, user: User, user_device_id: int) -> None:
     db.commit()
 
 
-def create_location(db: Session, user: User, user_device_id: int, data: LocationCreateRequest) -> UserDeviceLocation:
-    _get_owned_device(db, user, user_device_id)
-
-    address = None
-    try:
-        client = GoogleMapClient()
-        address = client.get_address(f"{data.latitude},{data.longitude}")
-    except Exception as e:
-        logger.warning("Reverse geocoding failed for (%s, %s): %s", data.latitude, data.longitude, e)
-
-    location = UserDeviceLocation(
-        user_device_id=user_device_id,
-        latitude=data.latitude,
-        longitude=data.longitude,
-        timestamp=data.timestamp,
-        address=address,
-    )
-    db.add(location)
-    db.commit()
-    db.refresh(location)
-    return location
-
-
-def get_locations(db: Session, user: User, user_device_id: int) -> list[UserDeviceLocation]:
-    _get_owned_device(db, user, user_device_id)
-    return (
-        db.query(UserDeviceLocation)
-        .filter(UserDeviceLocation.user_device_id == user_device_id)
-        .order_by(UserDeviceLocation.timestamp.desc())
-        .all()
-    )
-
-
-def get_health_batches(db: Session, user: User, user_device_id: int) -> list[UserDeviceHealthBatch]:
-    _get_owned_device(db, user, user_device_id)
-    return (
-        db.query(UserDeviceHealthBatch)
-        .filter(UserDeviceHealthBatch.user_device_id == user_device_id)
-        .order_by(UserDeviceHealthBatch.created_at.desc())
-        .all()
-    )
-
-
-def create_health_batch(db: Session, user: User, user_device_id: int, data: DailyHealthCreateRequest) -> None:
-    _get_owned_device(db, user, user_device_id)
-    batch = UserDeviceHealthBatch(
-        user_device_id=user_device_id,
-        batch_size=data.batch.batch_size,
-        record_count=data.batch.record_count,
-        sleep_data=data.payload.sleep_data,
-        origin_data_3=data.payload.origin_data_3,
-    )
-    db.add(batch)
-    db.commit()
-
-
 def create_location_batch(
     db: Session, user: User, user_device_id: int, data: LocationBatchCreateRequest
 ) -> dict:
@@ -154,6 +96,7 @@ def create_location_batch(
         db_locations.append(
             UserDeviceLocation(
                 user_device_id=user_device_id,
+                batch_date=data.batchDate,
                 latitude=point.lat,
                 longitude=point.lng,
                 timestamp=point.timestamp,
@@ -170,16 +113,14 @@ def get_location_batch(
     db: Session, user: User, user_device_id: int, start_date: date, end_date: date
 ) -> list[UserDeviceLocation]:
     _get_owned_device(db, user, user_device_id)
-    start_dt = datetime.combine(start_date, time.min, tzinfo=timezone.utc)
-    end_dt = datetime.combine(end_date, time.max, tzinfo=timezone.utc)
     return (
         db.query(UserDeviceLocation)
         .filter(
             UserDeviceLocation.user_device_id == user_device_id,
-            UserDeviceLocation.timestamp >= start_dt,
-            UserDeviceLocation.timestamp <= end_dt,
+            UserDeviceLocation.batch_date >= start_date,
+            UserDeviceLocation.batch_date <= end_date,
         )
-        .order_by(UserDeviceLocation.timestamp.asc())
+        .order_by(UserDeviceLocation.batch_date.asc(), UserDeviceLocation.timestamp.asc())
         .all()
     )
 
@@ -216,13 +157,17 @@ def create_health_record(
 
 
 def get_health_records(
-    db: Session, user: User, user_device_id: int
+    db: Session, user: User, user_device_id: int, start_date: date, end_date: date
 ) -> list[UserDeviceHealthRecord]:
     _get_owned_device(db, user, user_device_id)
     return (
         db.query(UserDeviceHealthRecord)
-        .filter(UserDeviceHealthRecord.user_device_id == user_device_id)
-        .order_by(UserDeviceHealthRecord.created_at.desc())
+        .filter(
+            UserDeviceHealthRecord.user_device_id == user_device_id,
+            UserDeviceHealthRecord.batch_date >= start_date,
+            UserDeviceHealthRecord.batch_date <= end_date,
+        )
+        .order_by(UserDeviceHealthRecord.batch_date.asc())
         .all()
     )
 

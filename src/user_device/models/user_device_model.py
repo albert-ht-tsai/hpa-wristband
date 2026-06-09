@@ -27,6 +27,7 @@ class UserDeviceLocation(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_device_id = Column(Integer, ForeignKey("user_devices.id"), nullable=False, index=True)
+    batch_date = Column(Date, nullable=True, index=True)
     latitude = Column(Float, nullable=False)
     longitude = Column(Float, nullable=False)
     timestamp = Column(DateTime(timezone=True), nullable=False)

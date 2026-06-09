@@ -63,12 +63,13 @@ class LocationCreateResponse(BaseModel):
 
 
 class LocationItem(BaseModel):
+    batchDate: Optional[date] = Field(None, validation_alias="batch_date")
     latitude: float
     longitude: float
     timestamp: datetime
     address: Optional[str] = None
 
-    model_config = {"from_attributes": True}
+    model_config = {"from_attributes": True, "populate_by_name": True}
 
 
 class LocationListResponse(BaseModel):
@@ -285,6 +286,7 @@ class TrajectoryBatchInfo(BaseModel):
 
 class LocationBatchCreateRequest(BaseModel):
     batch: TrajectoryBatchInfo
+    batchDate: date
     locations: Annotated[List[TrajectoryPoint], Field(max_length=50)]
 
 

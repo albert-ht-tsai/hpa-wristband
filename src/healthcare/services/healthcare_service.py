@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import os
+from dataclasses import dataclass
+from datetime import date, datetime, timezone
 
 from dotenv import load_dotenv
 from fastapi import HTTPException, status
@@ -26,6 +28,91 @@ from src.user.models.user_model import User
 from src.user_device.models.user_device_model import UserDevice, UserDeviceHealthRecord
 
 load_dotenv()
+
+
+# ---------------------------------------------------------------------------
+# Merged health data container (duck-types UserDeviceHealthRecord attributes)
+# ---------------------------------------------------------------------------
+
+@dataclass
+class MergedHealthData:
+    sleep_by_day: list | None
+    heart_rate: dict | None
+    blood_pressure: dict | None
+    blood_oxygen: dict | None
+    body_temperature: dict | None
+    calories: dict | None
+    distance: dict | None
+    met: dict | None
+    stress: dict | None
+    hrv: dict | None
+    ecg: dict | None
+
+
+def _merge_records(records: list[UserDeviceHealthRecord]) -> MergedHealthData:
+    if len(records) == 1:
+        r = records[0]
+        return MergedHealthData(
+            sleep_by_day=r.sleep_by_day,
+            heart_rate=r.heart_rate,
+            blood_pressure=r.blood_pressure,
+            blood_oxygen=r.blood_oxygen,
+            body_temperature=r.body_temperature,
+            calories=r.calories,
+            distance=r.distance,
+            met=r.met,
+            stress=r.stress,
+            hrv=r.hrv,
+            ecg=r.ecg,
+        )
+
+    sleep_by_day = []
+    hr_slots, bp_slots, spo2_slots, temp_slots = [], [], [], []
+    cal_slots, cal_total = [], 0.0
+    dist_slots, dist_total = [], 0.0
+    met_slots, met_steps = [], 0
+    stress_slots, hrv_slots, ecg_slots = [], [], []
+
+    for r in records:
+        if r.sleep_by_day:
+            sleep_by_day.extend(r.sleep_by_day)
+        if r.heart_rate and r.heart_rate.get("slots"):
+            hr_slots.extend(r.heart_rate["slots"])
+        if r.blood_pressure and r.blood_pressure.get("slots"):
+            bp_slots.extend(r.blood_pressure["slots"])
+        if r.blood_oxygen and r.blood_oxygen.get("slots"):
+            spo2_slots.extend(r.blood_oxygen["slots"])
+        if r.body_temperature and r.body_temperature.get("slots"):
+            temp_slots.extend(r.body_temperature["slots"])
+        if r.calories:
+            cal_slots.extend(r.calories.get("slots") or [])
+            cal_total += r.calories.get("totalKcal") or 0.0
+        if r.distance:
+            dist_slots.extend(r.distance.get("slots") or [])
+            dist_total += r.distance.get("totalKm") or 0.0
+        if r.met:
+            met_slots.extend(r.met.get("slots") or [])
+            met_steps += r.met.get("totalSteps") or 0
+        if r.stress and r.stress.get("slots"):
+            stress_slots.extend(r.stress["slots"])
+        if r.hrv and r.hrv.get("slots"):
+            hrv_slots.extend(r.hrv["slots"])
+        if r.ecg and r.ecg.get("slots"):
+            ecg_slots.extend(r.ecg["slots"])
+
+    return MergedHealthData(
+        sleep_by_day=sleep_by_day or None,
+        heart_rate={"slots": hr_slots} if hr_slots else None,
+        blood_pressure={"slots": bp_slots} if bp_slots else None,
+        blood_oxygen={"slots": spo2_slots} if spo2_slots else None,
+        body_temperature={"slots": temp_slots} if temp_slots else None,
+        calories={"totalKcal": round(cal_total, 2), "slots": cal_slots} if cal_slots else None,
+        distance={"totalKm": round(dist_total, 3), "slots": dist_slots} if dist_slots else None,
+        met={"totalSteps": met_steps, "slots": met_slots} if met_slots else None,
+        stress={"slots": stress_slots} if stress_slots else None,
+        hrv={"slots": hrv_slots} if hrv_slots else None,
+        ecg={"slots": ecg_slots} if ecg_slots else None,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -82,25 +169,28 @@ def _require_device(db: Session, user: User, user_device_id: int) -> UserDevice:
     return device
 
 
-def _get_health_record(db: Session, user_device_id: int, record_id: int | None) -> UserDeviceHealthRecord:
-    if record_id:
-        record = db.query(UserDeviceHealthRecord).filter(
-            UserDeviceHealthRecord.id == record_id,
+def _get_records_in_range(
+    db: Session,
+    user_device_id: int,
+    start_date: date,
+    end_date: date,
+) -> list[UserDeviceHealthRecord]:
+    records = (
+        db.query(UserDeviceHealthRecord)
+        .filter(
             UserDeviceHealthRecord.user_device_id == user_device_id,
-        ).first()
-    else:
-        record = (
-            db.query(UserDeviceHealthRecord)
-            .filter(UserDeviceHealthRecord.user_device_id == user_device_id)
-            .order_by(UserDeviceHealthRecord.created_at.desc())
-            .first()
+            UserDeviceHealthRecord.batch_date >= start_date,
+            UserDeviceHealthRecord.batch_date <= end_date,
         )
-    if not record:
+        .order_by(UserDeviceHealthRecord.batch_date.asc())
+        .all()
+    )
+    if not records:
         raise HTTPException(
             status.HTTP_404_NOT_FOUND,
-            detail={"code": 404, "message": "Health record not found"},
+            detail={"code": 404, "message": "No health records found in the specified date range"},
         )
-    return record
+    return records
 
 
 # ---------------------------------------------------------------------------
@@ -126,7 +216,8 @@ def report_to_response(report: UserHealthcareReport) -> HealthcareReportResponse
     )
     return HealthcareReportResponse(
         id=report.id,
-        healthRecordId=report.health_record_id,
+        startDate=report.start_date,
+        endDate=report.end_date,
         scoreBoard=score_board,
         risks=[RiskItem(**r) for r in (report.risks or [])],
         recommendations=[RecommendationItem(**r) for r in (report.recommendations or [])],
@@ -139,71 +230,81 @@ def report_to_response(report: UserHealthcareReport) -> HealthcareReportResponse
 # Service functions
 # ---------------------------------------------------------------------------
 
-def create_healthcare_analysis(
+def generate_healthcare_analysis(
     db: Session,
     user: User,
     user_device_id: int,
-    health_record_id: int | None,
-) -> UserHealthcareReport:
+    start_date: date,
+    end_date: date,
+) -> HealthcareReportResponse:
     _require_device(db, user, user_device_id)
-    record = _get_health_record(db, user_device_id, health_record_id)
 
-    # Step 1 – validate raw data
-    validation_results = validate_health_record(record)
+    # Step 1 – query health records by date range
+    records = _get_records_in_range(db, user_device_id, start_date, end_date)
 
-    # Step 2 – compute scores (deterministic)
-    scores = calculate_all_scores(record)
+    # Step 2 – merge records into one analysis unit
+    merged = _merge_records(records)
+
+    # Step 3 – validate raw data
+    validation_results = validate_health_record(merged)
+
+    # Step 4 – compute scores (deterministic)
+    scores = calculate_all_scores(merged)
     total = calculate_total_score(scores)
     scores["_total"] = total
 
-    # Step 3 – derive risk levels from scores
+    # Step 5 – derive risk levels from scores
     metric_scores = {k: v for k, v in scores.items() if k != "_total"}
     risk_levels = build_risk_summary(metric_scores)
 
-    # Step 4 – build prompt
-    prompt = build_healthcare_prompt(user, record, scores, validation_results, risk_levels)
+    # Step 6 – build prompt
+    prompt = build_healthcare_prompt(user, merged, scores, validation_results, risk_levels)
 
-    # Step 5 – call OpenAI
+    # Step 7 – call OpenAI
     ai_result = _call_openai(prompt)
 
-    # Step 6 – parse & normalize AI output
+    # Step 8 – parse & normalize AI output
     risks = parse_risks(ai_result.get("risks", []))
     recommendations = parse_recommendations(ai_result.get("recommendations", []))
 
-    # Step 7 – persist report
-    report = UserHealthcareReport(
-        user_id=user.id,
-        user_device_id=user_device_id,
-        health_record_id=record.id,
-        score_total=total,
-        score_sleep=scores.get("sleep"),
-        score_heart_rate=scores.get("heartRate"),
-        score_blood_pressure=scores.get("bloodPressure"),
-        score_blood_oxygen=scores.get("bloodOxygen"),
-        score_body_temperature=scores.get("bodyTemperature"),
-        score_hrv=scores.get("hrv"),
-        score_ecg=scores.get("ecg"),
-        score_met=scores.get("met"),
-        score_stress=scores.get("stress"),
-        risks=risks,
-        recommendations=recommendations,
-        ai_model=os.getenv("OPENAI_MODEL", "gpt-4.1-mini"),
+    # Step 9 – build and return response directly (no DB persistence)
+    score_board = ScoreBoard(
+        total=total,
+        sleep=_make_score_item(scores.get("sleep")),
+        heartRate=_make_score_item(scores.get("heartRate")),
+        bloodPressure=_make_score_item(scores.get("bloodPressure")),
+        bloodOxygen=_make_score_item(scores.get("bloodOxygen")),
+        bodyTemperature=_make_score_item(scores.get("bodyTemperature")),
+        hrv=_make_score_item(scores.get("hrv")),
+        ecg=_make_score_item(scores.get("ecg")),
+        met=_make_score_item(scores.get("met")),
+        stress=_make_score_item(scores.get("stress")),
     )
-    db.add(report)
-    db.commit()
-    db.refresh(report)
-    return report
+    return HealthcareReportResponse(
+        id=0,
+        startDate=start_date,
+        endDate=end_date,
+        scoreBoard=score_board,
+        risks=[RiskItem(**r) for r in risks],
+        recommendations=[RecommendationItem(**r) for r in recommendations],
+        aiModel=os.getenv("OPENAI_MODEL", "gpt-4.1-mini"),
+        createdAt=datetime.now(timezone.utc),
+    )
 
 
 def get_healthcare_reports(
     db: Session,
     user: User,
     user_device_id: int,
+    start_date: date | None = None,
+    end_date: date | None = None,
 ) -> list[UserHealthcareReport]:
     _require_device(db, user, user_device_id)
-    return (
-        db.query(UserHealthcareReport)
-        .filter(UserHealthcareReport.user_device_id == user_device_id)
-        .order_by(UserHealthcareReport.created_at.desc())
-        .all()
+    q = db.query(UserHealthcareReport).filter(
+        UserHealthcareReport.user_device_id == user_device_id
     )
+    if start_date:
+        q = q.filter(UserHealthcareReport.start_date >= start_date)
+    if end_date:
+        q = q.filter(UserHealthcareReport.end_date <= end_date)
+    return q.order_by(UserHealthcareReport.created_at.desc()).all()

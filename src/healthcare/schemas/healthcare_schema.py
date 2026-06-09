@@ -1,11 +1,7 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import List, Optional
 
 from pydantic import BaseModel
-
-
-class HealthcareAnalysisRequest(BaseModel):
-    health_record_id: Optional[int] = None
 
 
 class ScoreItem(BaseModel):
@@ -41,8 +37,9 @@ class RecommendationItem(BaseModel):
 
 
 class HealthcareReportResponse(BaseModel):
-    id: int
-    healthRecordId: Optional[int] = None
+    id: Optional[int] = None
+    startDate: Optional[date] = None
+    endDate: Optional[date] = None
     scoreBoard: ScoreBoard
     risks: List[RiskItem]
     recommendations: List[RecommendationItem]
