@@ -9,11 +9,14 @@ from src.user.models.user_model import User
 from src.user_device.models.user_device_model import UserDevice, UserDeviceHealthRecord, UserDeviceLocation
 from src.user_device.schemas.user_device_schema import (
     BatchStatusResponse,
+    DateListResponse,
     HealthRecordCreateRequest,
     HealthRecordResponse,
     LocationBatchCreateRequest,
+    MonthDays,
     UserDeviceCreateRequest,
     UserDeviceUpdateRequest,
+    YearMonths,
 )
 
 
@@ -189,6 +192,56 @@ def health_record_to_status(record: UserDeviceHealthRecord) -> BatchStatusRespon
         progress=record.progress,
         error=record.error,
     )
+
+
+def _dates_to_response(dates: list) -> DateListResponse:
+    year_map: dict[int, dict[int, list[int]]] = {}
+    for d in dates:
+        if d is None:
+            continue
+        year_map.setdefault(d.year, {}).setdefault(d.month, []).append(d.day)
+    return DateListResponse(
+        data=[
+            YearMonths(
+                year=y,
+                months=[
+                    MonthDays(month=m, days=sorted(days))
+                    for m, days in sorted(months.items())
+                ],
+            )
+            for y, months in sorted(year_map.items())
+        ]
+    )
+
+
+def get_location_dates(db: Session, user: User, user_device_id: int) -> DateListResponse:
+    _get_owned_device(db, user, user_device_id)
+    rows = (
+        db.query(UserDeviceLocation.batch_date)
+        .filter(
+            UserDeviceLocation.user_device_id == user_device_id,
+            UserDeviceLocation.batch_date.isnot(None),
+        )
+        .distinct()
+        .order_by(UserDeviceLocation.batch_date.asc())
+        .all()
+    )
+    return _dates_to_response([r.batch_date for r in rows])
+
+
+def get_health_dates(db: Session, user: User, user_device_id: int) -> DateListResponse:
+    _get_owned_device(db, user, user_device_id)
+    rows = (
+        db.query(UserDeviceHealthRecord.batch_date)
+        .filter(
+            UserDeviceHealthRecord.user_device_id == user_device_id,
+            UserDeviceHealthRecord.batch_date.isnot(None),
+        )
+        .distinct()
+        .order_by(UserDeviceHealthRecord.batch_date.asc())
+        .all()
+    )
+    return _dates_to_response([r.batch_date for r in rows])
 
 
 def health_record_to_response(record: UserDeviceHealthRecord) -> HealthRecordResponse:

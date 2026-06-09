@@ -5,6 +5,7 @@ from fastapi import APIRouter
 from src.core.deps import CurrentUser, SessionDep
 from src.user_device.schemas.user_device_schema import (
     BatchStatusResponse,
+    DateListResponse,
     HealthRecordCreateRequest,
     HealthRecordListResponse,
     HealthRecordResponse,
@@ -25,8 +26,10 @@ from src.user_device.services.user_device_service import (
     create_location_batch,
     delete_device,
     get_devices,
+    get_health_dates,
     get_health_records,
     get_location_batch,
+    get_location_dates,
     health_record_to_response,
     health_record_to_status,
     update_device,
@@ -87,6 +90,16 @@ def get_location_batch_endpoint(
 def create_health_record_endpoint(user_device_id: int, body: HealthRecordCreateRequest, db: SessionDep, current_user: CurrentUser):
     record = create_health_record(db, current_user, user_device_id, body)
     return health_record_to_status(record)
+
+
+@router.get("/{user_device_id}/location/date", response_model=DateListResponse)
+def get_location_dates_endpoint(user_device_id: int, db: SessionDep, current_user: CurrentUser):
+    return get_location_dates(db, current_user, user_device_id)
+
+
+@router.get("/{user_device_id}/health/date", response_model=DateListResponse)
+def get_health_dates_endpoint(user_device_id: int, db: SessionDep, current_user: CurrentUser):
+    return get_health_dates(db, current_user, user_device_id)
 
 
 @router.get("/{user_device_id}/health-batch", response_model=HealthRecordListResponse)

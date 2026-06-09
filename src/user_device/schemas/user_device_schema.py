@@ -280,6 +280,20 @@ class HealthRecordListResponse(BaseModel):
     count: int
 
 
+class MonthDays(BaseModel):
+    month: int
+    days: List[int]
+
+
+class YearMonths(BaseModel):
+    year: int
+    months: List[MonthDays]
+
+
+class DateListResponse(BaseModel):
+    data: List[YearMonths]
+
+
 # ---- Trajectory / Location Batch Schemas ----
 
 class TrajectoryPoint(BaseModel):
