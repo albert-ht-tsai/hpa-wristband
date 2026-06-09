@@ -266,6 +266,15 @@ class HealthRecordResponse(BaseModel):
     ecg: Optional[dict] = None
 
 
+class BatchStatusResponse(BaseModel):
+    id: int
+    batchDate: Optional[date] = None
+    isLoading: bool
+    isComplete: bool
+    progress: float
+    error: Optional[str] = None
+
+
 class HealthRecordListResponse(BaseModel):
     data: List[HealthRecordResponse]
     count: int

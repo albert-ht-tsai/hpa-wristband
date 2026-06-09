@@ -8,6 +8,7 @@ from src.map.map_client import GoogleMapClient
 from src.user.models.user_model import User
 from src.user_device.models.user_device_model import UserDevice, UserDeviceHealthRecord, UserDeviceLocation
 from src.user_device.schemas.user_device_schema import (
+    BatchStatusResponse,
     HealthRecordCreateRequest,
     HealthRecordResponse,
     LocationBatchCreateRequest,
@@ -106,7 +107,14 @@ def create_location_batch(
 
     db.add_all(db_locations)
     db.commit()
-    return {"total": len(data.locations), "saved": len(db_locations)}
+    return BatchStatusResponse(
+        id=0,
+        batchDate=data.batchDate,
+        isLoading=False,
+        isComplete=True,
+        progress=1.0,
+        error=None,
+    )
 
 
 def get_location_batch(
@@ -169,6 +177,17 @@ def get_health_records(
         )
         .order_by(UserDeviceHealthRecord.batch_date.asc())
         .all()
+    )
+
+
+def health_record_to_status(record: UserDeviceHealthRecord) -> BatchStatusResponse:
+    return BatchStatusResponse(
+        id=record.id,
+        batchDate=record.batch_date,
+        isLoading=record.is_loading,
+        isComplete=record.is_complete,
+        progress=record.progress,
+        error=record.error,
     )
 
 
