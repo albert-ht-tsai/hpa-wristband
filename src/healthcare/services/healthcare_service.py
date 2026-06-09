@@ -7,6 +7,7 @@ from datetime import date, datetime, timezone
 
 from dotenv import load_dotenv
 from fastapi import HTTPException, status
+from groq import Groq
 from openai import OpenAI
 from sqlalchemy.orm import Session
 
@@ -116,39 +117,65 @@ def _merge_records(records: list[UserDeviceHealthRecord]) -> MergedHealthData:
 
 
 # ---------------------------------------------------------------------------
-# OpenAI helpers
+# AI provider helpers (OpenAI primary, Groq fallback)
 # ---------------------------------------------------------------------------
 
-def _get_openai_client() -> OpenAI:
-    return OpenAI(
-        api_key=os.getenv("OPENAI_API_KEY"),
-        timeout=float(os.getenv("OPENAI_TIMEOUT_SECONDS", "30")),
+_SYSTEM_PROMPT = "You are a professional health analysis AI. Always respond with valid JSON only."
+
+
+def _call_groq(prompt: str) -> tuple[dict, str]:
+    model = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
+    client = Groq(
+        api_key=os.getenv("GROQ_API_KEY"),
+        timeout=float(os.getenv("GROQ_TIMEOUT_SECONDS", "30")),
     )
+    response = client.chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": _SYSTEM_PROMPT},
+            {"role": "user", "content": prompt},
+        ],
+        temperature=float(os.getenv("GROQ_TEMPERATURE", "0.2")),
+        max_tokens=int(os.getenv("GROQ_MAX_TOKENS", "800")),
+        response_format={"type": "json_object"},
+    )
+    return json.loads(response.choices[0].message.content), model
 
 
-def _call_openai(prompt: str) -> dict:
-    client = _get_openai_client()
+def _call_ai(prompt: str) -> tuple[dict, str]:
+    model = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
     try:
+        client = OpenAI(
+            api_key=os.getenv("OPENAI_API_KEY"),
+            timeout=float(os.getenv("OPENAI_TIMEOUT_SECONDS", "30")),
+        )
         response = client.chat.completions.create(
-            model=os.getenv("OPENAI_MODEL", "gpt-4.1-mini"),
+            model=model,
             messages=[
-                {
-                    "role": "system",
-                    "content": "You are a professional health analysis AI. Always respond with valid JSON only.",
-                },
+                {"role": "system", "content": _SYSTEM_PROMPT},
                 {"role": "user", "content": prompt},
             ],
             temperature=float(os.getenv("OPENAI_TEMPERATURE", "0.2")),
-            max_tokens=int(os.getenv("OPENAI_MAX_TOKENS", "1200")),
+            max_tokens=int(os.getenv("OPENAI_MAX_TOKENS", "800")),
             response_format={"type": "json_object"},
         )
-        content = response.choices[0].message.content
-        return json.loads(content)
+        return json.loads(response.choices[0].message.content), model
     except Exception as e:
+        err = str(e)
+        if "429" in err or "quota" in err.lower() or "insufficient" in err.lower():
+            logger.warning("OpenAI quota exceeded, falling back to Groq: %s", e)
+            try:
+                return _call_groq(prompt)
+            except Exception as groq_err:
+                logger.error("Groq fallback also failed: %s", groq_err)
+                raise HTTPException(
+                    status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail={"code": 503, "message": f"AI service unavailable: {groq_err}"},
+                )
         logger.error("OpenAI call failed: %s", e)
         raise HTTPException(
             status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={"code": 503, "message": f"AI service unavailable: {str(e)}"},
+            detail={"code": 503, "message": f"AI service unavailable: {err}"},
         )
 
 
@@ -260,8 +287,8 @@ def generate_healthcare_analysis(
     # Step 6 – build prompt
     prompt = build_healthcare_prompt(user, merged, scores, validation_results, risk_levels)
 
-    # Step 7 – call OpenAI
-    ai_result = _call_openai(prompt)
+    # Step 7 – call AI (OpenAI with Groq fallback)
+    ai_result, ai_model = _call_ai(prompt)
 
     # Step 8 – parse & normalize AI output
     risks = parse_risks(ai_result.get("risks", []))
@@ -287,7 +314,7 @@ def generate_healthcare_analysis(
         scoreBoard=score_board,
         risks=[RiskItem(**r) for r in risks],
         recommendations=[RecommendationItem(**r) for r in recommendations],
-        aiModel=os.getenv("OPENAI_MODEL", "gpt-4.1-mini"),
+        aiModel=ai_model,
         createdAt=datetime.now(timezone.utc),
     )
 

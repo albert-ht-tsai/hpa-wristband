@@ -7,9 +7,10 @@ from sqlalchemy import pool
 from alembic import context
 
 from src.core.database import Base, AWS_RDS_URL
-import src.auth.models         
-import src.user.models         
-import src.user_device.models  
+import src.auth.models
+import src.user.models
+import src.user_device.models
+import src.healthcare.models
 
 config = context.config
 
