@@ -180,10 +180,10 @@ def _get_records_in_range(
         db.query(UserDeviceHealthRecord)
         .filter(
             UserDeviceHealthRecord.user_device_id == user_device_id,
-            UserDeviceHealthRecord.batch_date >= start_date,
-            UserDeviceHealthRecord.batch_date <= end_date,
+            UserDeviceHealthRecord.start_date >= start_date,
+            UserDeviceHealthRecord.start_date <= end_date,
         )
-        .order_by(UserDeviceHealthRecord.batch_date.asc())
+        .order_by(UserDeviceHealthRecord.start_date.asc())
         .all()
     )
     if not records:
