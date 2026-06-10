@@ -100,7 +100,8 @@ def create_location_batch(
         db_locations.append(
             UserDeviceLocation(
                 user_device_id=user_device_id,
-                batch_date=data.batchDate,
+                start_date=data.start_date,
+                end_date=data.end_date,
                 latitude=point.lat,
                 longitude=point.lng,
                 timestamp=point.timestamp,
@@ -112,7 +113,8 @@ def create_location_batch(
     db.commit()
     return BatchStatusResponse(
         id=0,
-        batchDate=data.batchDate,
+        start_date=data.start_date,
+        end_date=data.end_date,
         isLoading=False,
         isComplete=True,
         progress=1.0,
@@ -128,10 +130,10 @@ def get_location_batch(
         db.query(UserDeviceLocation)
         .filter(
             UserDeviceLocation.user_device_id == user_device_id,
-            UserDeviceLocation.batch_date >= start_date,
-            UserDeviceLocation.batch_date <= end_date,
+            UserDeviceLocation.start_date >= start_date,
+            UserDeviceLocation.start_date <= end_date,
         )
-        .order_by(UserDeviceLocation.batch_date.asc(), UserDeviceLocation.timestamp.asc())
+        .order_by(UserDeviceLocation.start_date.asc(), UserDeviceLocation.timestamp.asc())
         .all()
     )
 
@@ -142,7 +144,8 @@ def create_health_record(
     _get_owned_device(db, user, user_device_id)
     record = UserDeviceHealthRecord(
         user_device_id=user_device_id,
-        batch_date=data.batchDate,
+        start_date=data.start_date,
+        end_date=data.end_date,
         batch_size=data.batch.batch_size,
         record_count=data.batch.record_count,
         is_loading=False,
@@ -175,10 +178,10 @@ def get_health_records(
         db.query(UserDeviceHealthRecord)
         .filter(
             UserDeviceHealthRecord.user_device_id == user_device_id,
-            UserDeviceHealthRecord.batch_date >= start_date,
-            UserDeviceHealthRecord.batch_date <= end_date,
+            UserDeviceHealthRecord.start_date >= start_date,
+            UserDeviceHealthRecord.start_date <= end_date,
         )
-        .order_by(UserDeviceHealthRecord.batch_date.asc())
+        .order_by(UserDeviceHealthRecord.start_date.asc())
         .all()
     )
 
@@ -186,7 +189,8 @@ def get_health_records(
 def health_record_to_status(record: UserDeviceHealthRecord) -> BatchStatusResponse:
     return BatchStatusResponse(
         id=record.id,
-        batchDate=record.batch_date,
+        start_date=record.start_date,
+        end_date=record.end_date,
         isLoading=record.is_loading,
         isComplete=record.is_complete,
         progress=record.progress,
@@ -217,37 +221,38 @@ def _dates_to_response(dates: list) -> DateListResponse:
 def get_location_dates(db: Session, user: User, user_device_id: int) -> DateListResponse:
     _get_owned_device(db, user, user_device_id)
     rows = (
-        db.query(UserDeviceLocation.batch_date)
+        db.query(UserDeviceLocation.start_date)
         .filter(
             UserDeviceLocation.user_device_id == user_device_id,
-            UserDeviceLocation.batch_date.isnot(None),
+            UserDeviceLocation.start_date.isnot(None),
         )
         .distinct()
-        .order_by(UserDeviceLocation.batch_date.asc())
+        .order_by(UserDeviceLocation.start_date.asc())
         .all()
     )
-    return _dates_to_response([r.batch_date for r in rows])
+    return _dates_to_response([r.start_date for r in rows])
 
 
 def get_health_dates(db: Session, user: User, user_device_id: int) -> DateListResponse:
     _get_owned_device(db, user, user_device_id)
     rows = (
-        db.query(UserDeviceHealthRecord.batch_date)
+        db.query(UserDeviceHealthRecord.start_date)
         .filter(
             UserDeviceHealthRecord.user_device_id == user_device_id,
-            UserDeviceHealthRecord.batch_date.isnot(None),
+            UserDeviceHealthRecord.start_date.isnot(None),
         )
         .distinct()
-        .order_by(UserDeviceHealthRecord.batch_date.asc())
+        .order_by(UserDeviceHealthRecord.start_date.asc())
         .all()
     )
-    return _dates_to_response([r.batch_date for r in rows])
+    return _dates_to_response([r.start_date for r in rows])
 
 
 def health_record_to_response(record: UserDeviceHealthRecord) -> HealthRecordResponse:
     return HealthRecordResponse(
         id=record.id,
-        batchDate=record.batch_date,
+        start_date=record.start_date,
+        end_date=record.end_date,
         isLoading=record.is_loading,
         isComplete=record.is_complete,
         progress=record.progress,

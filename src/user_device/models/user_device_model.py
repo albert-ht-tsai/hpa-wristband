@@ -27,7 +27,8 @@ class UserDeviceLocation(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_device_id = Column(Integer, ForeignKey("user_devices.id"), nullable=False, index=True)
-    batch_date = Column(Date, nullable=True, index=True)
+    start_date = Column(Date, nullable=True, index=True)
+    end_date = Column(Date, nullable=True)
     latitude = Column(Float, nullable=False)
     longitude = Column(Float, nullable=False)
     timestamp = Column(DateTime(timezone=True), nullable=False)
@@ -56,7 +57,8 @@ class UserDeviceHealthRecord(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_device_id = Column(Integer, ForeignKey("user_devices.id"), nullable=False, index=True)
-    batch_date = Column(Date, nullable=True, index=True)
+    start_date = Column(Date, nullable=True, index=True)
+    end_date = Column(Date, nullable=True)
     batch_size = Column(Integer, nullable=False, default=1)
     record_count = Column(Integer, nullable=False, default=1)
     is_loading = Column(Boolean, default=False, nullable=False)

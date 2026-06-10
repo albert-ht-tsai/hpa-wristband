@@ -5,7 +5,9 @@
       "Bash(Select-Object FullName, PSIsContainer)",
       "Bash(Sort-Object FullName)",
       "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\Tim\\\\Desktop\\\\worksapce\\\\hpa-wristband\" | Select-Object Name, @{N='Type';E={if\\($_.PSIsContainer\\){'Directory'}else{'File'}}} | Format-Table -AutoSize)",
-      "Bash(grep -E '\\\\.\\(py|txt|env|yaml|yml|json|md|toml\\)$')"
+      "Bash(grep -E '\\\\.\\(py|txt|env|yaml|yml|json|md|toml\\)$')",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\Tim\\\\Desktop\\\\worksapce\\\\hpa-wristband\" -Recurse -File)",
+      "Bash(Select-Object -First 20)"
     ]
   }
 }

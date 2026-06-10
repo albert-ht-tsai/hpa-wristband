@@ -63,7 +63,8 @@ class LocationCreateResponse(BaseModel):
 
 
 class LocationItem(BaseModel):
-    batchDate: Optional[date] = Field(None, validation_alias="batch_date")
+    start_date: Optional[date] = Field(None, validation_alias="start_date")
+    end_date: Optional[date] = Field(None, validation_alias="end_date")
     latitude: float
     longitude: float
     timestamp: datetime
@@ -232,7 +233,8 @@ class EcgData(BaseModel):
 
 class HealthRecordCreateRequest(BaseModel):
     batch: HealthBatchInfo
-    batchDate: date
+    start_date: date
+    end_date: date
     sleepByDay: Optional[List[SleepDayItem]] = None
     heartRate: Optional[HeartRateData] = None
     bloodPressure: Optional[BloodPressureData] = None
@@ -248,7 +250,8 @@ class HealthRecordCreateRequest(BaseModel):
 
 class HealthRecordResponse(BaseModel):
     id: int
-    batchDate: Optional[date] = None
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
     isLoading: bool
     isComplete: bool
     progress: float
@@ -268,7 +271,8 @@ class HealthRecordResponse(BaseModel):
 
 class BatchStatusResponse(BaseModel):
     id: int
-    batchDate: Optional[date] = None
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
     isLoading: bool
     isComplete: bool
     progress: float
@@ -309,7 +313,8 @@ class TrajectoryBatchInfo(BaseModel):
 
 class LocationBatchCreateRequest(BaseModel):
     batch: TrajectoryBatchInfo
-    batchDate: date
+    start_date: date
+    end_date: date
     locations: Annotated[List[TrajectoryPoint], Field(max_length=50)]
 
 
